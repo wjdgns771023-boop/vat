@@ -1,17 +1,17 @@
 
-# app_vat_form_supply_fixed_styled_nochk_nocash_deemed08.py
-# 변경점:
-#  - 의제매입 공제율 8%(0.08)로 고정, 화면 비표시
-#  - 의제매입세액 공제액 단독 표시 제거
-#  - "③ 추가 공제합계"만 표시
-#  - 나머지: 세율 10% 고정, 공급가액 입력, 숫자만 표시, 박스/음영/간격 유지
+# app_vat_form_supply_fixed_styled_deemed08_cashsale.py
+# - 세율 10% 고정, 공급가액 입력
+# - 숫자만 표시, 박스/음영/간격 유지
+# - 매출자료에 "현금매출" 행 추가
+# - 매입자료: 체크박스/현금매입 없음
+# - 의제매입 공제율 8% 고정, 개별 표시 없이 추가공제합계만 표기
 
 import streamlit as st
 
 st.set_page_config(page_title="부가가치세(VAT) 신고서 작성 프로그램", layout="wide")
 
-VAT_RATE = 0.10  # 공급세액 계산용
-DEEMED_RATE = 0.08  # 의제매입 공제율 고정 (비표시)
+VAT_RATE = 0.10
+DEEMED_RATE = 0.08
 
 def tax_from_supply(supply: int) -> int:
     return int(round(supply * VAT_RATE))
@@ -65,8 +65,15 @@ with col2: sale_card_supply = st.number_input("sale_card_supply", min_value=0, v
 with col3: sale_card_tax = tax_from_supply(sale_card_supply); render_num(sale_card_tax)
 st.markdown('</div>', unsafe_allow_html=True)
 
-sale_supply_total = sale_taxinv_supply + sale_card_supply
-sale_tax_total = sale_taxinv_tax + sale_card_tax
+# 현금매출 (추가)
+col1, col2, col3 = st.columns([1.3, 1, 1])
+with col1: st.markdown('<div class="tbl-row"><div style="display:flex;align-items:center;">현금매출</div>', unsafe_allow_html=True)
+with col2: sale_cash_supply = st.number_input("sale_cash_supply", min_value=0, value=0, step=1000, label_visibility="collapsed")
+with col3: sale_cash_tax = tax_from_supply(sale_cash_supply); render_num(sale_cash_tax)
+st.markdown('</div>', unsafe_allow_html=True)
+
+sale_supply_total = sale_taxinv_supply + sale_card_supply + sale_cash_supply
+sale_tax_total = sale_taxinv_tax + sale_card_tax + sale_cash_tax
 
 st.markdown('<div class="total-row"><div>① 매출합계</div><div>{}</div><div>{}</div></div>'.format(f"{sale_supply_total:,}", f"{sale_tax_total:,}"), unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
@@ -101,14 +108,12 @@ colA, colB = st.columns(2)
 with colA:
     st.markdown('<div class="muted">의제매입세액 공제</div>', unsafe_allow_html=True)
     deemed_base = st.number_input("의제매입 매입가액(공급가 기준)", min_value=0, value=0, step=1000)
-    # 공제율 입력 UI 제거(8% 고정, 비표시)
     deemed_credit = int(round(deemed_base * DEEMED_RATE))
 with colB:
     st.markdown('<div class="muted">기타 공제(전자신고, 신용카드발행 등)</div>', unsafe_allow_html=True)
     other_credit = st.number_input("기타 공제합계(직접 입력)", min_value=0, value=0, step=1000)
 
 total_extra_credit = deemed_credit + other_credit
-# 의제매입세액 공제액 '단독' 숫자 표시는 제거하고, 합계만 표시
 st.markdown('<div class="total-row-1"><div>③ 추가 공제합계: {}</div></div>'.format(f"{total_extra_credit:,}"), unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
