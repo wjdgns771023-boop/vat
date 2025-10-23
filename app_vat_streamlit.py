@@ -10,7 +10,7 @@
 from typing import Tuple
 import streamlit as st
 
-st.set_page_config(page_title="부가가치세(VAT) 폼 입력 도구", layout="wide")
+st.set_page_config(page_title="부가가치세(일반) 신고서 작성 프로그램", layout="wide")
 
 # ----------------- Helper -----------------
 def split_tax_from_gross(amount: int, tax_rate: float) -> Tuple[int, int]:
