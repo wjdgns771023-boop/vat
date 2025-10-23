@@ -1,217 +1,178 @@
 
-# app_vat_streamlit.py
-# 단일 파일 웹 UI: CSV 업로드 → VAT 요약
+# app_vat_form.py
+# 폼 입력형 부가가치세 요약 도구 (CSV 없이 수기 입력)
 # 실행:
 #   pip install streamlit pandas python-dateutil
-#   streamlit run app_vat_streamlit.py
+#   streamlit run app_vat_form.py
 #
-# CSV 요구 컬럼(소문자):
-#   date (YYYY-MM-DD), type (sale|purchase), category (taxable|zero|exempt),
-#   amount (정수; 기본은 총액/부가세포함), tax_rate (과세건 세율; 예: 0.1)
-#
-# 주의: 학습용/보조용입니다. 실제 신고 전 최신 법령·서식 확인 필수.
+# 주의: 학습/보조용. 실제 신고 전 최신 법령·불공제 항목·한도 확인 필수.
 
-import io
-from datetime import datetime, date
-from dateutil.relativedelta import relativedelta
-
-import pandas as pd
+from typing import Tuple
 import streamlit as st
 
-APP_TITLE = "부가가치세(VAT) 요약 도구"
+st.set_page_config(page_title="부가가치세(VAT) 폼 입력 도구", layout="wide")
 
-REQUIRED_COLS = ["date", "type", "category", "amount", "tax_rate"]
-TYPE_OPTIONS = ["sale", "purchase"]
-CAT_OPTIONS = ["taxable", "zero", "exempt"]
-
-def split_tax_from_gross(amount: int, tax_rate: float) -> tuple[int, int]:
-    """
-    총액(공급가+세액)과 세율로 공급가/세액을 역산.
-    예: 총 110,000원, 세율 10% -> (100,000, 10,000)
-    """
-    if tax_rate is None or tax_rate <= 0:
+# ----------------- Helper -----------------
+def split_tax_from_gross(amount: int, tax_rate: float) -> Tuple[int, int]:
+    """총액(공급가+세액)과 세율로 공급가/세액 역산."""
+    if tax_rate <= 0:
         return int(amount), 0
     supply = round(amount / (1 + tax_rate))
-    tax = int(amount) - supply
-    return int(supply), int(tax)
+    return int(supply), int(amount - supply)
 
-def split_tax_from_supply(supply: int, tax_rate: float) -> tuple[int, int]:
-    """
-    공급가와 세율로 세액 및 총액을 산출.
-    """
-    if tax_rate is None or tax_rate <= 0:
+def split_tax_from_supply(supply: int, tax_rate: float) -> Tuple[int, int]:
+    """공급가와 세율로 세액/총액 산출."""
+    if tax_rate <= 0:
         return int(supply), 0
     tax = round(supply * tax_rate)
     return int(supply), int(tax)
 
-def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
-    # 표준화: 컬럼 소문자, 공백 제거
-    df.columns = [str(c).strip().lower() for c in df.columns]
-    # 필수 컬럼 체크
-    missing = [c for c in REQUIRED_COLS if c not in df.columns]
-    if missing:
-        raise ValueError(f"필수 컬럼이 없습니다: {', '.join(missing)}")
-    # 타입 정리
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
-    df["type"] = df["type"].astype(str).str.strip().str.lower()
-    df["category"] = df["category"].astype(str).str.strip().str.lower()
-    # 숫자
-    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0).astype(int)
-    df["tax_rate"] = pd.to_numeric(df["tax_rate"], errors="coerce").fillna(0.0).astype(float)
-    # 유효성: 값 범위
-    df = df[df["type"].isin(TYPE_OPTIONS)]
-    df = df[df["category"].isin(CAT_OPTIONS)]
-    df = df[df["date"].notna()]
-    return df
-
-def summarize(df: pd.DataFrame,
-              start: date,
-              end: date,
-              amount_mode: str = "gross") -> dict:
-    """
-    amount_mode: 'gross' (총액/부가세포함) 또는 'supply' (공급가)
-    """
-    mask = (df["date"] >= start) & (df["date"] <= end)
-    sub = df.loc[mask].copy()
-
-    s_taxable_supply = s_taxable_tax = 0
-    s_zero = s_exempt = 0
-    p_taxable_supply = p_taxable_tax = 0
-
-    for _, r in sub.iterrows():
-        ttype, cat = r["type"], r["category"]
-        amt, rate = int(r["amount"]), float(r.get("tax_rate", 0.0))
-
-        if ttype == "sale":
-            if cat == "taxable":
-                if amount_mode == "gross":
-                    supply, tax = split_tax_from_gross(amt, rate)
-                else:
-                    supply, tax = split_tax_from_supply(amt, rate)
-                s_taxable_supply += supply
-                s_taxable_tax += tax
-            elif cat == "zero":
-                # 영세: 세율 0, 공급가=amount
-                s_zero += amt
-            elif cat == "exempt":
-                s_exempt += amt
-
-        elif ttype == "purchase":
-            if cat == "taxable":
-                if amount_mode == "gross":
-                    supply, tax = split_tax_from_gross(amt, rate)
-                else:
-                    supply, tax = split_tax_from_supply(amt, rate)
-                p_taxable_supply += supply
-                p_taxable_tax += tax
-            # zero/exempt 매입은 공제 없음
-
-    net_vat = s_taxable_tax - p_taxable_tax
-    return {
-        "과세매출 공급가액": s_taxable_supply,
-        "과세매출 세액": s_taxable_tax,
-        "영세매출": s_zero,
-        "면세매출": s_exempt,
-        "과세매입 공급가액": p_taxable_supply,
-        "과세매입 세액": p_taxable_tax,
-        "납부(+) / 환급(-) 세액": net_vat
-    }
-
-def to_summary_df(summary: dict) -> pd.DataFrame:
-    return pd.DataFrame({"항목": list(summary.keys()), "금액": list(summary.values())})
-
-def make_downloadable_csv(df: pd.DataFrame, filename: str) -> bytes:
-    return df.to_csv(index=False).encode("utf-8-sig")
-
-# ------------------ UI ------------------
-
-st.set_page_config(page_title=APP_TITLE, layout="wide")
-st.title(APP_TITLE)
-st.caption("CSV 업로드 → 기간 선택 → 즉시 요약. (학습/보조용)")
+# ----------------- UI -----------------
+st.title("부가가치세(VAT) 폼 입력 도구")
+st.caption("각 항목을 클릭하여 금액을 직접 입력하세요. (학습/보조용)")
 
 with st.sidebar:
     st.subheader("입력 설정")
+    rate = st.number_input("기본 세율(과세건)", min_value=0.0, max_value=1.0, value=0.1, step=0.01)
     amount_mode = st.radio("금액 기준", ["총액(부가세 포함)", "공급가(부가세 제외)"], index=0)
-    amount_mode_val = "gross" if "총액" in amount_mode else "supply"
-    default_rate = st.number_input("기본 세율(과세건)", min_value=0.0, max_value=1.0, value=0.1, step=0.01,
-                                   help="CSV의 tax_rate가 비어있을 때 사용할 기본 세율")
+    is_gross = amount_mode.startswith("총액")
 
-uploaded = st.file_uploader("CSV 파일을 업로드하세요", type=["csv"])
+# ===== 매출자료 =====
+st.markdown("### 매출자료")
+c1, c2, c3, c4 = st.columns([1.2, 1, 1, 1])
+with c1: st.markdown("**증빙구분**")
+with c2: st.markdown("**금액**")
+with c3: st.markdown("**세율**")
+with c4: st.markdown("**세액(자동)**")
 
-# 템플릿/샘플
-sample = pd.DataFrame({
-    "date": ["2025-01-05", "2025-01-10", "2025-01-15", "2025-01-20", "2025-02-02"],
-    "type": ["sale", "purchase", "sale", "sale", "purchase"],
-    "category": ["taxable", "taxable", "zero", "exempt", "taxable"],
-    "amount": [110000, 55000, 200000, 30000, 22000],
-    "tax_rate": [0.1, 0.1, 0.0, 0.0, 0.1],
-    "memo": ["상품A 판매", "원재료 매입", "수출(영세)", "면세도서", "소모품"]
-})
-with st.expander("CSV 템플릿/샘플 보기", expanded=False):
-    st.write("필수 컬럼:", ", ".join(REQUIRED_COLS))
-    st.dataframe(sample)
-    st.download_button("샘플 CSV 다운로드", data=make_downloadable_csv(sample, "vat_sample.csv"),
-                       file_name="vat_sample.csv", mime="text/csv")
-
-if uploaded:
-    try:
-        df = pd.read_csv(uploaded)
-        # 빈 tax_rate는 기본 세율로 채우기(과세건만)
-        if "tax_rate" in df.columns:
-            df["tax_rate"] = pd.to_numeric(df["tax_rate"], errors="coerce")
-            df["tax_rate"] = df["tax_rate"].fillna(0.0)
+with st.container():
+    col1, col2, col3, col4 = st.columns([1.2, 1, 1, 1])
+    with col1:
+        st.write("세금계산서")
+    with col2:
+        sale_taxinv_amt = st.number_input("sale_taxinv_amt", min_value=0, value=0, step=1000, label_visibility="collapsed")
+    with col3:
+        sale_taxinv_rate = st.number_input("sale_taxinv_rate", min_value=0.0, max_value=1.0, value=rate, step=0.01, label_visibility="collapsed")
+    with col4:
+        if is_gross:
+            s, t = split_tax_from_gross(sale_taxinv_amt, sale_taxinv_rate)
         else:
-            df["tax_rate"] = 0.0
+            s, t = split_tax_from_supply(sale_taxinv_amt, sale_taxinv_rate)
+        sale_taxinv_supply, sale_taxinv_tax = s, t
+        st.metric(label="세액", value=f"{t:,}")
 
-        df = normalize_df(df)
-        # 과세건인데 tax_rate==0이면 sidebar 기본세율로 보정
-        mask_taxable = df["category"].eq("taxable") & (df["tax_rate"] <= 0)
-        df.loc[mask_taxable, "tax_rate"] = float(default_rate)
+with st.container():
+    col1, col2, col3, col4 = st.columns([1.2, 1, 1, 1])
+    with col1:
+        st.write("신용카드·현금영수증")
+    with col2:
+        sale_card_amt = st.number_input("sale_card_amt", min_value=0, value=0, step=1000, label_visibility="collapsed")
+    with col3:
+        sale_card_rate = st.number_input("sale_card_rate", min_value=0.0, max_value=1.0, value=rate, step=0.01, label_visibility="collapsed")
+    with col4:
+        if is_gross:
+            s, t = split_tax_from_gross(sale_card_amt, sale_card_rate)
+        else:
+            s, t = split_tax_from_supply(sale_card_amt, sale_card_rate)
+        sale_card_supply, sale_card_tax = s, t
+        st.metric(label="세액", value=f"{t:,}")
 
-        st.success(f"업로드 성공! 총 {len(df):,}건")
-        st.dataframe(df.head(100), use_container_width=True)
+with st.container():
+    col1, col2, col3, col4 = st.columns([1.2, 1, 1, 1])
+    with col1:
+        st.write("현금매출")
+    with col2:
+        sale_cash_amt = st.number_input("sale_cash_amt", min_value=0, value=0, step=1000, label_visibility="collapsed")
+    with col3:
+        sale_cash_rate = st.number_input("sale_cash_rate", min_value=0.0, max_value=1.0, value=rate, step=0.01, label_visibility="collapsed")
+    with col4:
+        if is_gross:
+            s, t = split_tax_from_gross(sale_cash_amt, sale_cash_rate)
+        else:
+            s, t = split_tax_from_supply(sale_cash_amt, sale_cash_rate)
+        sale_cash_supply, sale_cash_tax = s, t
+        st.metric(label="세액", value=f"{t:,}")
 
-        # 기간 선택: 기본은 데이터의 최소~최대
-        min_d = min(df["date"])
-        max_d = max(df["date"])
-        col1, col2 = st.columns(2)
-        with col1:
-            start = st.date_input("시작일", value=min_d, min_value=min_d, max_value=max_d)
-        with col2:
-            end = st.date_input("종료일", value=max_d, min_value=min_d, max_value=max_d)
+sale_tax_total = sale_taxinv_tax + sale_card_tax + sale_cash_tax
+sale_supply_total = sale_taxinv_supply + sale_card_supply + sale_cash_supply
+st.info(f"**① 매출합계**  공급가액: {sale_supply_total:,} / 세액: {sale_tax_total:,}")
+st.markdown("---")
 
-        # 요약 계산
-        summary = summarize(df, start, end, amount_mode=amount_mode_val)
-        summary_df = to_summary_df(summary)
+# ===== 매입자료 =====
+st.markdown("### 매입자료 (공제가능분)")
+c1, c2, c3, c4, c5 = st.columns([1.2, 1, 1, 1, 1])
+with c1: st.markdown("**증빙구분**")
+with c2: st.markdown("**금액**")
+with c3: st.markdown("**세율**")
+with c4: st.markdown("**공제가능**")
+with c5: st.markdown("**세액(자동)**")
 
-        st.subheader("요약 결과")
-        st.dataframe(summary_df, use_container_width=True)
+with st.container():
+    col1, col2, col3, col4, col5 = st.columns([1.2, 1, 1, 1, 1])
+    with col1: st.write("세금계산서")
+    with col2: buy_taxinv_amt = st.number_input("buy_taxinv_amt", min_value=0, value=0, step=1000, label_visibility="collapsed")
+    with col3: buy_taxinv_rate = st.number_input("buy_taxinv_rate", min_value=0.0, max_value=1.0, value=rate, step=0.01, label_visibility="collapsed")
+    with col4: buy_taxinv_ok = st.checkbox("buy_taxinv_ok", value=True, label_visibility="collapsed")
+    with col5:
+        if is_gross: s, t = split_tax_from_gross(buy_taxinv_amt, buy_taxinv_rate)
+        else: s, t = split_tax_from_supply(buy_taxinv_amt, buy_taxinv_rate)
+        buy_taxinv_supply, buy_taxinv_tax = s, (t if buy_taxinv_ok else 0)
+        st.metric(label="세액", value=f"{buy_taxinv_tax:,}")
 
-        # 간단 차트(막대)
-        try:
-            plot_df = summary_df[~summary_df["항목"].isin(["납부(+) / 환급(-) 세액"])].copy()
-            st.bar_chart(plot_df.set_index("항목"))
-        except Exception:
-            pass
+with st.container():
+    col1, col2, col3, col4, col5 = st.columns([1.2, 1, 1, 1, 1])
+    with col1: st.write("신용카드·현금영수증")
+    with col2: buy_card_amt = st.number_input("buy_card_amt", min_value=0, value=0, step=1000, label_visibility="collapsed")
+    with col3: buy_card_rate = st.number_input("buy_card_rate", min_value=0.0, max_value=1.0, value=rate, step=0.01, label_visibility="collapsed")
+    with col4: buy_card_ok = st.checkbox("buy_card_ok", value=True, label_visibility="collapsed")
+    with col5:
+        if is_gross: s, t = split_tax_from_gross(buy_card_amt, buy_card_rate)
+        else: s, t = split_tax_from_supply(buy_card_amt, buy_card_rate)
+        buy_card_supply, buy_card_tax = s, (t if buy_card_ok else 0)
+        st.metric(label="세액", value=f"{buy_card_tax:,}")
 
-        # 다운로드
-        colA, colB = st.columns(2)
-        with colA:
-            st.download_button("요약 CSV 다운로드", data=make_downloadable_csv(summary_df, "vat_summary.csv"),
-                               file_name=f"vat_summary_{start}_{end}.csv", mime="text/csv")
-        with colB:
-            # 필터링된 원본도 다운로드
-            mask = (df["date"] >= start) & (df["date"] <= end)
-            filtered = df.loc[mask].copy()
-            st.download_button("필터링된 원본 CSV 다운로드",
-                               data=make_downloadable_csv(filtered, "vat_filtered.csv"),
-                               file_name=f"vat_filtered_{start}_{end}.csv",
-                               mime="text/csv")
+with st.container():
+    col1, col2, col3, col4, col5 = st.columns([1.2, 1, 1, 1, 1])
+    with col1: st.write("현금매입")
+    with col2: buy_cash_amt = st.number_input("buy_cash_amt", min_value=0, value=0, step=1000, label_visibility="collapsed")
+    with col3: buy_cash_rate = st.number_input("buy_cash_rate", min_value=0.0, max_value=1.0, value=rate, step=0.01, label_visibility="collapsed")
+    with col4: buy_cash_ok = st.checkbox("buy_cash_ok(공제가능)", value=False, label_visibility="collapsed")
+    with col5:
+        if is_gross: s, t = split_tax_from_gross(buy_cash_amt, buy_cash_rate)
+        else: s, t = split_tax_from_supply(buy_cash_amt, buy_cash_rate)
+        buy_cash_supply, buy_cash_tax = s, (t if buy_cash_ok else 0)
+        st.metric(label="세액", value=f"{buy_cash_tax:,}")
 
-        st.info("※ 이 결과는 학습/보조용입니다. 신고 전 최신 법령·서식 및 불공제 항목 여부 등을 반드시 검토하세요.")
+buy_tax_total = buy_taxinv_tax + buy_card_tax + buy_cash_tax
+buy_supply_total = buy_taxinv_supply + buy_card_supply + buy_cash_supply
+st.info(f"**② 매입합계(공제세액)**  공급가액: {buy_supply_total:,} / 세액: {buy_tax_total:,}")
+st.markdown("---")
 
-    except Exception as e:
-        st.error(f"처리 중 오류가 발생했습니다: {e}")
+# ===== 공제세액(추가 공제) =====
+st.markdown("### 공제세액 (추가)")
+colA, colB = st.columns(2)
+with colA:
+    st.write("의제매입세액 공제")
+    deemed_base = st.number_input("의제매입 매입가액(공급가 기준)", min_value=0, value=0, step=1000,
+                                  help="업종/품목별 공제율·한도 상이. 신고 전 확인 필요.")
+    deemed_rate = st.number_input("의제매입 공제율(예: 0.108)", min_value=0.0, max_value=1.0, value=0.0, step=0.001)
+    deemed_credit = round(deemed_base * deemed_rate)
+    st.metric("의제매입세액 공제액", f"{deemed_credit:,}")
+with colB:
+    st.write("기타 공제(전자신고, 신용카드발행 등)")
+    other_credit = st.number_input("기타 공제합계(직접 입력)", min_value=0, value=0, step=1000)
+total_extra_credit = deemed_credit + other_credit
+st.info(f"**③ 추가 공제합계**: {total_extra_credit:,}")
+st.markdown("---")
 
-else:
-    st.warning("CSV를 업로드하면 요약을 보여드립니다.")
+# ===== 요약 =====
+st.markdown("### 요약")
+net_vat = sale_tax_total - buy_tax_total - total_extra_credit
+
+col1, col2, col3 = st.columns(3)
+with col1: st.metric("① 매출세액 합계", f"{sale_tax_total:,}")
+with col2: st.metric("② 매입세액(공제) 합계", f"{buy_tax_total:,}")
+with col3: st.metric("③ 추가 공제합계", f"{total_extra_credit:,}")
+
+st.success(f"**부가세 예상 납부(+) / 환급(-) 세액 = ① - ② - ③ = {net_vat:,}**")
+st.caption("※ 참고: 실제 신고서는 항목/요건/한도 및 가산세 규정이 상세합니다. 본 도구는 학습/보조용으로 결과를 단서로만 활용하세요.")
