@@ -8,7 +8,7 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="부가가치세(VAT) 간편 계산기", layout="wide")
+st.set_page_config(page_title="부가가치세 간편 계산기", layout="wide")
 
 VAT_RATE = 0.10
 DEEMED_RATE = 0.08
