@@ -1,9 +1,7 @@
 
-# app_vat_form_supply_fixed_styled_nolabel.py
-# - 세율 고정 10%
-# - 입력 금액 = 공급가액
-# - 표 박스/음영/합계행 강조
-# - 각 셀의 값 표시에 "공급세액" 라벨 제거 → 숫자만 표시
+# app_vat_form_supply_fixed_styled_keep_summary.py
+# - 행(셀) 값은 숫자만 표시 (라벨 제거)
+# - "③ 추가 공제합계" 박스와 "요약" 섹션은 app_vat_form_supply_fixed_styled.py와 동일 형식 유지
 
 import streamlit as st
 
@@ -49,25 +47,25 @@ st.markdown('<div class="tbl-head"><div>증빙구분</div><div>금액(공급가�
 col1, col2, col3 = st.columns([1.3, 1, 1])
 with col1: st.markdown('<div class="tbl-row"><div style="display:flex;align-items:center;">세금계산서</div>', unsafe_allow_html=True)
 with col2: sale_taxinv_supply = st.number_input("sale_taxinv_supply", min_value=0, value=0, step=1000, label_visibility="collapsed")
-with col3: render_num(tax_from_supply(sale_taxinv_supply))
+with col3: sale_taxinv_tax = tax_from_supply(sale_taxinv_supply); render_num(sale_taxinv_tax)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # 신용카드/현금영수증
 col1, col2, col3 = st.columns([1.3, 1, 1])
 with col1: st.markdown('<div class="tbl-row"><div style="display:flex;align-items:center;">신용카드·현금영수증</div>', unsafe_allow_html=True)
 with col2: sale_card_supply = st.number_input("sale_card_supply", min_value=0, value=0, step=1000, label_visibility="collapsed")
-with col3: render_num(tax_from_supply(sale_card_supply))
+with col3: sale_card_tax = tax_from_supply(sale_card_supply); render_num(sale_card_tax)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # 현금매출
 col1, col2, col3 = st.columns([1.3, 1, 1])
 with col1: st.markdown('<div class="tbl-row"><div style="display:flex;align-items:center;">현금매출</div>', unsafe_allow_html=True)
 with col2: sale_cash_supply = st.number_input("sale_cash_supply", min_value=0, value=0, step=1000, label_visibility="collapsed")
-with col3: render_num(tax_from_supply(sale_cash_supply))
+with col3: sale_cash_tax = tax_from_supply(sale_cash_supply); render_num(sale_cash_tax)
 st.markdown('</div>', unsafe_allow_html=True)
 
 sale_supply_total = sale_taxinv_supply + sale_card_supply + sale_cash_supply
-sale_tax_total = tax_from_supply(sale_taxinv_supply) + tax_from_supply(sale_card_supply) + tax_from_supply(sale_cash_supply)
+sale_tax_total = sale_taxinv_tax + sale_card_tax + sale_cash_tax
 
 st.markdown(
     '<div class="total-row"><div>① 매출합계</div><div>{}</div><div>{}</div></div></div>'.format(
@@ -84,7 +82,7 @@ def input_row(label_key: str, label_text: str, default_ok: bool):
     with col1: st.markdown(f'<div class="tbl-row" style="grid-template-columns:1.3fr 1fr 0.8fr 1fr"><div style="display:flex;align-items:center;">{label_text}</div>', unsafe_allow_html=True)
     with col2: supply = st.number_input(f"{label_key}_supply", min_value=0, value=0, step=1000, label_visibility="collapsed")
     with col3: ok = st.checkbox(f"{label_key}_ok", value=default_ok, label_visibility="collapsed")
-    with col4: render_num(tax_from_supply(supply) if ok else 0)
+    with col4: tax = tax_from_supply(supply) if ok else 0; render_num(tax)
     st.markdown('</div>', unsafe_allow_html=True)
     return supply, (tax_from_supply(supply) if ok else 0)
 
@@ -109,24 +107,35 @@ with colA:
     deemed_base = st.number_input("의제매입 매입가액(공급가 기준)", min_value=0, value=0, step=1000)
     deemed_rate = st.number_input("의제매입 공제율(예: 0.108)", min_value=0.0, max_value=1.0, value=0.0, step=0.001)
     deemed_credit = int(round(deemed_base * deemed_rate))
+    # 숫자만 표시
     render_num(deemed_credit)
 with colB:
     st.markdown('<div class="muted">기타 공제(전자신고, 신용카드발행 등)</div>', unsafe_allow_html=True)
     other_credit = st.number_input("기타 공제합계(직접 입력)", min_value=0, value=0, step=1000)
 
 total_extra_credit = deemed_credit + other_credit
-st.markdown('<div class="total-row" style="grid-template-columns: 1fr"><div>③ 추가 공제합계: {}</div></div></div>'.format(f"{total_extra_credit:,}"), unsafe_allow_html=True)
+# → styled.py와 동일한 합계행 형식 유지
+st.markdown(
+    '<div class="total-row" style="grid-template-columns: 1fr"><div>③ 추가 공제합계: {}</div></div></div>'.format(
+        f"{total_extra_credit:,}"
+    ), unsafe_allow_html=True
+)
 
 # ================= 요약 =================
+# → styled.py와 동일 형식: 3개 metric + 합계 문장형 박스
 st.markdown('<div class="box"><div class="header">요약</div>', unsafe_allow_html=True)
 
 net_vat = sale_tax_total - buy_tax_total - total_extra_credit
 
 c1, c2, c3 = st.columns(3)
-with c1: render_num(sale_tax_total)
-with c2: render_num(buy_tax_total)
-with c3: render_num(total_extra_credit)
+with c1: st.metric("① 매출 '공급세액' 합계", f"{sale_tax_total:,}")
+with c2: st.metric("② 매입 '공급세액'(공제) 합계", f"{buy_tax_total:,}")
+with c3: st.metric("③ 추가 공제합계", f"{total_extra_credit:,}")
 
-st.markdown('<div class="total-row" style="grid-template-columns: 1fr"><div>부가세 예상 납부(+) / 환급(-) 세액 = ① - ② - ③ = {}</div></div></div>'.format(f"{net_vat:,}"), unsafe_allow_html=True)
+st.markdown(
+    '<div class="total-row" style="grid-template-columns: 1fr"><div>부가세 예상 납부(+) / 환급(-) 세액 = ① - ② - ③ = {}</div></div></div>'.format(
+        f"{net_vat:,}"
+    ), unsafe_allow_html=True
+)
 
 st.caption("※ 본 도구는 학습/보조용입니다. 실제 신고 전 최신 법령·불공제 항목·한도·가산세 등을 검토하세요.")
