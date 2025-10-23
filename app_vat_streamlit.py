@@ -26,7 +26,7 @@ st.markdown(
             box-shadow:0 1px 2px rgba(16,24,40,.04); margin-bottom:var(--gap-section); }
       .box .header{ font-weight:700; font-size:1.1rem; margin-bottom:8px; }
       .tbl-head{ display:grid; grid-template-columns:1.3fr 1fr 1fr; padding:10px 12px; border-radius:10px;
-                 background:#F3F4F6; color:#111827; font-weight:600; margin-bottom:6px; }
+                 background:#F3F4F6; color:#111827; font-weight:600; margin-bottom:var(--gap-row); }
       .tbl-row{ display:grid; grid-template-columns:1.3fr 1fr 1fr; padding:8px 12px; border-radius:10px;
                 background:#FAFAFA; margin-bottom:var(--gap-row); border:1px dashed #E5E7EB; }
       .tbl-row:hover{ background:#F9FAFB; }
@@ -36,6 +36,7 @@ st.markdown(
                     background:#EEF2FF; border:1px solid #C7D2FE; font-weight:700; color:#1E3A8A; margin-top:4px; margin-bottom:var(--gap-group); }
       .muted{ color:#6B7280; font-size:.9rem; }
       .num{ text-align:right; font-weight:700; font-size:1.25rem; padding-top:4px; }
+      .spacer-row{ height: var(--gap-row); }
     </style>
     """, unsafe_allow_html=True
 )
@@ -57,6 +58,7 @@ with col1: st.markdown('<div class="tbl-row"><div style="display:flex;align-item
 with col2: sale_taxinv_supply = st.number_input("sale_taxinv_supply", min_value=0, value=0, step=1000, label_visibility="collapsed")
 with col3: sale_taxinv_tax = tax_from_supply(sale_taxinv_supply); render_num(sale_taxinv_tax)
 st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('<div class="spacer-row"></div>', unsafe_allow_html=True)
 
 # 신용카드·현금영수증
 col1, col2, col3 = st.columns([1.3, 1, 1])
@@ -64,6 +66,7 @@ with col1: st.markdown('<div class="tbl-row"><div style="display:flex;align-item
 with col2: sale_card_supply = st.number_input("sale_card_supply", min_value=0, value=0, step=1000, label_visibility="collapsed")
 with col3: sale_card_tax = tax_from_supply(sale_card_supply); render_num(sale_card_tax)
 st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('<div class="spacer-row"></div>', unsafe_allow_html=True)
 
 # 현금매출 (추가)
 col1, col2, col3 = st.columns([1.3, 1, 1])
@@ -88,6 +91,7 @@ with col1: st.markdown('<div class="tbl-row"><div style="display:flex;align-item
 with col2: buy_taxinv_supply = st.number_input("buy_taxinv_supply", min_value=0, value=0, step=1000, label_visibility="collapsed")
 with col3: buy_taxinv_tax = tax_from_supply(buy_taxinv_supply); render_num(buy_taxinv_tax)
 st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('<div class="spacer-row"></div>', unsafe_allow_html=True)
 
 # 신용카드·현금영수증
 col1, col2, col3 = st.columns([1.3, 1, 1])
