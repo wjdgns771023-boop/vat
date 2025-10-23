@@ -1,6 +1,6 @@
 
 # app_vat_form.py
-# 폼 입력형 부가가치세 요약 도구 (CSV 없이 수기 입력)
+# 일반과세자 부가가치세 신고서 프로그램 (CSV 없이 수기 입력)
 # 실행:
 #   pip install streamlit pandas python-dateutil
 #   streamlit run app_vat_form.py
