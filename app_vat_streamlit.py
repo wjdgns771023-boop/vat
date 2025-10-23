@@ -111,7 +111,7 @@ st.markdown('<div class="box"><div class="header">공제세액 (추가)</div>', 
 colA, colB = st.columns(2)
 with colA:
     st.markdown('<div class="muted">의제매입세액 공제</div>', unsafe_allow_html=True)
-    deemed_base = st.number_input("의제매입 매입가액(공급가 기준)", min_value=0, value=0, step=1000)
+    deemed_base = st.number_input("의제매입 매입가액(공급가 기준, 8% 적용)", min_value=0, value=0, step=1000)
     deemed_credit = int(round(deemed_base * DEEMED_RATE))
 with colB:
     st.markdown('<div class="muted">기타 공제(전자신고, 신용카드발행 등)</div>', unsafe_allow_html=True)
