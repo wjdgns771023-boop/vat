@@ -46,7 +46,7 @@ def render_num(value: int):
 
 # -------- Header --------
 st.title("부가가치세 간편 계산기")
-st.caption("금액은 공급가액(단위:원) 기준으로 입력하세요. 세율은 10%로 고정되어 자동 계산됩니다. (학습/보조용)")
+st.caption("금액은 공급가액(단위:원) 기준으로 입력하세요. 세율은 10%로 고정되어 자동 계산됩니다.")
 
 # ============== 매출자료 ==============
 st.markdown('<div class="box"><div class="header">매출자료</div>', unsafe_allow_html=True)
