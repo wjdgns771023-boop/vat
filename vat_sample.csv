@@ -1,0 +1,6 @@
+date,type,category,amount,tax_rate,memo
+2025-01-05,sale,taxable,110000,0.1,상품A 판매
+2025-01-10,purchase,taxable,55000,0.1,원재료 매입
+2025-01-15,sale,zero,200000,0.0,수출(영세)
+2025-01-20,sale,exempt,30000,0.0,면세도서 판매
+2025-02-02,purchase,taxable,22000,0.1,소모품

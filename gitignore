@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.dist/
+build/
+dist/
+
+# Envs
+.venv/
+venv/
+env/
+
+# OS / tools
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
