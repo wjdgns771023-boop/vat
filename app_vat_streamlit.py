@@ -28,7 +28,7 @@ def split_tax_from_supply(supply: int, tax_rate: float) -> Tuple[int, int]:
     return int(supply), int(tax)
 
 # ----------------- UI -----------------
-st.title("부가가치세(VAT) 폼 입력 도구")
+st.title("부가가치세(일반) 신고서 작성 프로그램")
 st.caption("각 항목을 클릭하여 금액을 직접 입력하세요. (학습/보조용)")
 
 with st.sidebar:
