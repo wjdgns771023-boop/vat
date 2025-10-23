@@ -20,7 +20,7 @@ def tax_from_supply(supply: int) -> int:
 st.markdown(
     """
     <style>
-      :root{ --gap-section:28px; --gap-group:16px; --gap-row:8px; }
+      :root{ --gap-section:28px; --gap-group:10px; --gap-row:10px; }
       .block-container{ padding-top:1.2rem; padding-bottom:2rem; }
       .box{ border:1px solid #E5E7EB; border-radius:14px; padding:16px 16px 8px; background:#fff;
             box-shadow:0 1px 2px rgba(16,24,40,.04); margin-bottom:var(--gap-section); }
