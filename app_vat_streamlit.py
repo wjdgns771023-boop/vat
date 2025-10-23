@@ -8,7 +8,7 @@
 
 import streamlit as st
 
-st.set_page_config(page_title="부가가치세(VAT) 신고서 작성 프로그램", layout="wide")
+st.set_page_config(page_title="부가가치세(VAT) 간편 계산기", layout="wide")
 
 VAT_RATE = 0.10
 DEEMED_RATE = 0.08
@@ -45,8 +45,8 @@ def render_num(value: int):
     st.markdown(f'<div class="num">{value:,}</div>', unsafe_allow_html=True)
 
 # -------- Header --------
-st.title("부가가치세(VAT) 신고서 작성 프로그램")
-st.caption("금액은 공급가액 기준으로 입력하세요. 세율은 10%로 고정되어 자동 계산됩니다. (학습/보조용)")
+st.title("부가가치세 간편 계산기")
+st.caption("금액은 공급가액(단위:원) 기준으로 입력하세요. 세율은 10%로 고정되어 자동 계산됩니다. (학습/보조용)")
 
 # ============== 매출자료 ==============
 st.markdown('<div class="box"><div class="header">매출자료</div>', unsafe_allow_html=True)
